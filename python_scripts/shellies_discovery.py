@@ -648,12 +648,22 @@ if model_id == MODEL_SHELLY1_ID or dev_id_prefix == MODEL_SHELLY1_PREFIX:
     inputs = 1
     relays = 1
 
-    bin_sensors = [SENSOR_FIRMWARE_UPDATE, SENSOR_EXT_SWITCH]
-    bin_sensors_enabled = [True, False]
-    bin_sensors_device_classes = [DEVICE_CLASS_UPDATE, None]
-    bin_sensors_pl = [None, PL_1_0]
-    bin_sensors_topics = [TOPIC_INFO, TOPIC_EXT_SWITCH]
-    bin_sensors_tpls = [TPL_NEW_FIRMWARE_FROM_INFO, None]
+    bin_sensors = {
+        SENSOR_FIRMWARE_UPDATE: {
+            "device_class": DEVICE_CLASS_UPDATE,
+            "enabled": True,
+            "payload": None,
+            "template": TPL_NEW_FIRMWARE_FROM_INFO,
+            "topic": TOPIC_INFO,
+        },
+        SENSOR_EXT_SWITCH: {
+            "device_class": None,
+            "enabled": True,
+            "payload": PL_1_0,
+            "template:": None,
+            "topic": TOPIC_EXT_SWITCH,
+        },
+    }
     inputs_types = [VALUE_BUTTON_LONG_PRESS, VALUE_BUTTON_SHORT_PRESS]
     relays_bin_sensors = [
         SENSOR_INPUT,
@@ -2870,7 +2880,7 @@ for sensor_id in range(ext_humi_sensors):
     mqtt_publish(config_topic, str(payload).replace("'", '"'), retain)
 
 # binary sensors
-for bin_sensor_id in range(len(bin_sensors)):
+for sensor, description in bin_sensors.items():
     device_config = get_device_config(dev_id)
     push_off_delay = True
     if isinstance(device_config.get(CONF_PUSH_OFF_DELAY), bool):
@@ -2897,28 +2907,28 @@ for bin_sensor_id in range(len(bin_sensors)):
         device_name = dev_id.replace("-", " ").replace("_", " ").title()
     else:
         device_name = f"{model} {dev_id.split('-')[-1]}"
-    unique_id = f"{dev_id}-{bin_sensors[bin_sensor_id].replace(' ', '-').replace('/', '-')}".lower()
-    config_topic = f"{disc_prefix}/binary_sensor/{dev_id}-{bin_sensors[bin_sensor_id].replace(' ', '-').replace('/', '-')}/config"
+    unique_id = f"{dev_id}-{sensor.replace(' ', '-').replace('/', '-')}".lower()
+    config_topic = f"{disc_prefix}/binary_sensor/{dev_id}-{sensor.replace(' ', '-').replace('/', '-')}/config"
     default_topic = f"shellies/{dev_id}/"
     availability_topic = "~online"
-    if bin_sensors[bin_sensor_id] == SENSOR_EXT_SWITCH:
+    if sensor == SENSOR_EXT_SWITCH:
         sensor_name = f"{device_name} External Switch"
     else:
         sensor_name = (
-            f"{device_name} {bin_sensors[bin_sensor_id].replace('/', ' ').title()}"
+            f"{device_name} {sensor.replace('/', ' ').title()}"
         )
-    if bin_sensors_topics[bin_sensor_id]:
+    if sensor:
         state_topic = f"~{bin_sensors_topics[bin_sensor_id]}"
     elif relays > 0 or white_lights > 0:
-        state_topic = f"~{bin_sensors[bin_sensor_id]}"
-    elif bin_sensors[bin_sensor_id] == SENSOR_OPENING:
+        state_topic = f"~{sensor}"
+    elif sensor == SENSOR_OPENING:
         state_topic = "~sensor/state"
     else:
-        state_topic = f"~sensor/{bin_sensors[bin_sensor_id]}"
+        state_topic = f"~sensor/{sensor}"
     payload = {
         KEY_NAME: sensor_name,
         KEY_STATE_TOPIC: state_topic,
-        KEY_ENABLED_BY_DEFAULT: str(bin_sensors_enabled[bin_sensor_id]),
+        KEY_ENABLED_BY_DEFAULT: str(description["enabled"]),
         KEY_UNIQUE_ID: unique_id,
         KEY_QOS: qos,
         KEY_DEVICE: {
@@ -2930,12 +2940,12 @@ for bin_sensor_id in range(len(bin_sensors)):
         },
         "~": default_topic,
     }
-    if bin_sensors_tpls[bin_sensor_id]:
-        payload[KEY_VALUE_TEMPLATE] = bin_sensors_tpls[bin_sensor_id]
+    if sensor:
+        payload[KEY_VALUE_TEMPLATE] = description["template"]
     else:
-        payload[KEY_PAYLOAD_ON] = bin_sensors_pl[bin_sensor_id][VALUE_ON]
-        payload[KEY_PAYLOAD_OFF] = bin_sensors_pl[bin_sensor_id][VALUE_OFF]
-    if battery_powered and bin_sensors[bin_sensor_id] not in (
+        payload[KEY_PAYLOAD_ON] = description["payload"][VALUE_ON]
+        payload[KEY_PAYLOAD_OFF] = description["payload"][VALUE_OFF]
+    if battery_powered and sensor not in (
         SENSOR_FIRMWARE_UPDATE,
         SENSOR_OPENING,
         SENSOR_CLOUD,
@@ -2945,10 +2955,9 @@ for bin_sensor_id in range(len(bin_sensors)):
         payload[KEY_AVAILABILITY_TOPIC] = availability_topic
         payload[KEY_PAYLOAD_AVAILABLE] = VALUE_TRUE
         payload[KEY_PAYLOAD_NOT_AVAILABLE] = VALUE_FALSE
-    if bin_sensors_device_classes[bin_sensor_id]:
-        payload[KEY_DEVICE_CLASS] = bin_sensors_device_classes[bin_sensor_id]
+    payload[KEY_DEVICE_CLASS] = description.get("device_class")
     if (
-        bin_sensors[bin_sensor_id]
+        sensor
         in (
             SENSOR_LONGPUSH,
             SENSOR_LONGPUSH_0,
@@ -2973,32 +2982,32 @@ for bin_sensor_id in range(len(bin_sensors)):
     if (
         model == MODEL_SHELLYRGBW2
         and mode == LIGHT_WHITE
-        and bin_sensors[bin_sensor_id] == SENSOR_OVERPOWER
+        and sensor == SENSOR_OVERPOWER
     ):
         payload = ""
     if (
         model in (MODEL_SHELLYDW, MODEL_SHELLYDW2)
-        and bin_sensors[bin_sensor_id] == SENSOR_OPENING
+        and sensor == SENSOR_OPENING
     ):
         payload[KEY_FORCE_UPDATE] = str(True)
-    if model == MODEL_SHELLYGAS and bin_sensors[bin_sensor_id] == SENSOR_GAS:
+    if model == MODEL_SHELLYGAS and sensor == SENSOR_GAS:
         payload[KEY_JSON_ATTRIBUTES_TOPIC] = state_topic
         payload[KEY_JSON_ATTRIBUTES_TEMPLATE] = TPL_GAS_TO_JSON
     if (
-        bin_sensors[bin_sensor_id] == SENSOR_FIRMWARE_UPDATE
-        and bin_sensors_tpls[bin_sensor_id] == TPL_NEW_FIRMWARE_FROM_INFO
+        sensor == SENSOR_FIRMWARE_UPDATE
+        and description["template"] == TPL_NEW_FIRMWARE_FROM_INFO
     ):
         payload[KEY_JSON_ATTRIBUTES_TOPIC] = f"~{TOPIC_INFO}"
         payload[KEY_JSON_ATTRIBUTES_TEMPLATE] = TPL_UPDATE_TO_JSON
     if (
         model == MODEL_SHELLY1
-        and bin_sensors[bin_sensor_id] == SENSOR_EXT_SWITCH
+        and sensor == SENSOR_EXT_SWITCH
         and not device_config.get(CONF_EXT_SWITCH)
     ):
         payload = ""
     if (
         model == MODEL_SHELLYHT
-        and bin_sensors[bin_sensor_id] == SENSOR_CLOUD
+        and sensor == SENSOR_CLOUD
         and device_config.get(CONF_POWERED) != ATTR_POWER_AC
     ):
         payload = ""
