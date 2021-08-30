@@ -2917,8 +2917,8 @@ for sensor, description in bin_sensors.items():
         sensor_name = (
             f"{device_name} {sensor.replace('/', ' ').title()}"
         )
-    if sensor:
-        state_topic = f"~{bin_sensors_topics[bin_sensor_id]}"
+    if description["topic"]:
+        state_topic = f"~{description['topic']}"
     elif relays > 0 or white_lights > 0:
         state_topic = f"~{sensor}"
     elif sensor == SENSOR_OPENING:
